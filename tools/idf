@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+# Run idf.py (or any command) inside the ESP8266_RTOS_SDK build container.
+#
+#   tools/idf build                 # build the firmware
+#   tools/idf menuconfig            # interactive config
+#   tools/idf -p /dev/ttyUSB0 flash monitor
+#   tools/idf --shell               # interactive shell in the container
+#   tools/idf --image               # (re)build the container image
+#
+# The project directory is mounted at /project. Builds run as your host user,
+# so output files in build/ are owned by you.
+
+set -euo pipefail
+
+IMAGE="localhost/xyclock-rtos-sdk:3.4"
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT="$(cd "$HERE/.." && pwd)"
+
+if [[ "${1:-}" == "--image" ]]; then
+    exec podman build -t "$IMAGE" -f "$HERE/container/Containerfile" "$HERE/container"
+fi
+
+if ! podman image exists "$IMAGE"; then
+    echo "Container image $IMAGE not found; building it (one-time, several minutes)..." >&2
+    podman build -t "$IMAGE" -f "$HERE/container/Containerfile" "$HERE/container"
+fi
+
+args=(run --rm --userns=keep-id --security-opt label=disable
+      -v "$PROJECT:/project" -w /project)
+
+# Interactive terminal when stdin is one (needed for menuconfig/monitor).
+# Only stdin is checked so that "tools/idf monitor | tee log" still works.
+[[ -t 0 ]] && args+=(-it)
+
+# Pass through any USB serial adapters that are plugged in.
+for dev in /dev/ttyUSB* /dev/ttyACM*; do
+    [[ -e "$dev" ]] && args+=(--device "$dev" --group-add keep-groups)
+done
+
+if [[ "${1:-}" == "--shell" ]]; then
+    exec podman "${args[@]}" "$IMAGE" bash
+fi
+
+# Firmware version, shown on the web page and checked by tools/check_image.py:
+# "v0.1.0" on a release tag, "v0.1.0-3-g1a2b3c4" three commits later, with
+# "-dirty" if tracked files have uncommitted changes. Computed here on every
+# run and passed to CMake, which reconfigures whenever it changes; the SDK's
+# own git lookup runs only at configure time and goes stale.
+ver=""
+if git -C "$PROJECT" rev-parse --git-dir >/dev/null 2>&1; then
+    ver="$(git -C "$PROJECT" describe --tags --always --dirty --match 'v[0-9]*')"
+fi
+[[ -n "$ver" ]] && set -- -D "PROJECT_VER=$ver" "$@"
+
+exec podman "${args[@]}" "$IMAGE" idf.py "$@"

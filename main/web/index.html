@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>FOXY Clock</title>
+<style>
+body{font-family:system-ui,sans-serif;margin:0;background:#f4f4f4;color:#222}
+header{background:#234;color:#fff;padding:.8em 1em}
+header h1{margin:0;font-size:1.3em}
+header small{font-weight:normal;font-size:.7em;opacity:.8;margin-left:.5em}
+main{max-width:52em;margin:auto;padding:.5em}
+section{background:#fff;border-radius:6px;margin:.8em 0;padding:.6em 1em 1em;box-shadow:0 1px 2px #0002}
+h2{font-size:1.1em;margin:.4em 0 .6em;border-bottom:1px solid #ddd;padding-bottom:.3em}
+label{display:block;margin:.35em 0}
+label>span{display:inline-block;min-width:11em}
+input[type=text],input[type=password],input[type=number],select{padding:.25em;font-size:1em;max-width:100%}
+input[type=number]{width:5.5em}
+.row{display:flex;flex-wrap:wrap;gap:.3em 1em;align-items:center}
+.muted{color:#777;font-size:.9em}
+.banner{background:#fe8;padding:.6em 1em;border-radius:6px;margin:.8em 0}
+.err{background:#fcc;padding:.6em 1em;border-radius:6px;margin:.8em 0;display:none}
+.ok{background:#cfc;padding:.6em 1em;border-radius:6px;margin:.8em 0;display:none}
+table{border-collapse:collapse;width:100%;font-size:.95em}
+td,th{padding:.25em .3em;border-bottom:1px solid #eee;text-align:left;vertical-align:top}
+.days label{display:inline;margin-right:.3em}
+.status td:first-child{color:#555;width:11em}
+button{font-size:1em;padding:.4em 1em;margin:.2em .3em .2em 0;cursor:pointer}
+.primary{background:#246;color:#fff;border:0;border-radius:4px}
+.danger{background:#a33;color:#fff;border:0;border-radius:4px}
+.alarm{border:1px solid #ddd;border-radius:5px;padding:.4em .6em;margin:.4em 0}
+.alarm.on{border-color:#6a6}
+#savebar{position:sticky;bottom:0;background:#fffe;padding:.5em;border-top:1px solid #ccc;text-align:right}
+</style></head>
+<body>
+<header><h1>FOXY Clock<small id="hver"></small></h1></header>
+<main>
+<div id="first" class="banner" style="display:none">First setup: choose your <b>time zone</b>, your WiFi network and a <b>web page password</b> (Security section) below, then press <b>Save</b>.</div>
+<div id="needpw" class="banner" style="display:none">This clock has no web page password. <b>Set one in the Security section and press Save</b> before making other changes: without it, anyone on your network could change the clock or install firmware.</div>
+<div id="err" class="err"></div>
+<div id="ok" class="ok"></div>
+
+<section><h2>Status</h2>
+<table class="status"><tbody id="status"><tr><td>Loading...</td></tr></tbody></table>
+<button id="sync">Sync now</button> <span id="syncmsg" class="muted"></span>
+</section>
+
+<form id="f" autocomplete="off" onsubmit="return false">
+
+<section><h2>Network</h2>
+<label><span>Nearby networks</span><select id="scanlist"><option value="">(scanning...)</option></select>
+ <button type="button" id="rescan">Scan again</button></label>
+<label><span>WiFi network (SSID)</span><input type="text" id="ssid" maxlength="32"></label>
+<label><span>WiFi password</span><input type="password" id="wifi_pass" maxlength="64" placeholder="unchanged"></label>
+<label><span>Security</span><select id="wifi_sec">
+ <option value="0">WPA2</option><option value="2">WPA2/WPA3 mixed</option><option value="1">WPA3</option></select></label>
+<label><span>Address</span><select id="dhcp"><option value="1">DHCP (automatic)</option><option value="0">Static IP</option></select></label>
+<div id="static">
+ <label><span>IP address</span><input type="text" id="ip" maxlength="15"></label>
+ <label><span>Netmask</span><input type="text" id="netmask" maxlength="15"></label>
+ <label><span>Gateway</span><input type="text" id="gateway" maxlength="15"></label>
+ <label><span>DNS server</span><input type="text" id="dns" maxlength="15"></label>
+</div>
+<label><span>Device name</span><input type="text" id="hostname" maxlength="32"> <span class="muted">reachable as <i>name</i>.local</span></label>
+<p><button type="button" id="wtest">Test connection</button> <span id="wtmsg" class="muted"></span></p>
+<p class="muted">Test connection tries the network above without saving, then returns to the current one (or to setup mode). During the test, up to about 20 seconds, this page may lose contact with the clock; it reconnects by itself. Saving network settings restarts the clock.</p>
+</section>
+
+<section><h2>Time</h2>
+<label><span>Time zone</span><select id="tzsel"></select></label>
+<label id="tzcustom"><span>Custom TZ string</span><input type="text" id="tz" maxlength="63" placeholder="e.g. EST5EDT,M3.2.0,M11.1.0"></label>
+<label><span>Clock format</span><select id="h24"><option value="0">12-hour</option><option value="1">24-hour</option></select></label>
+<div><span class="muted">NTP servers, in priority order (host name or IP address):</span>
+ <label><span>1</span><input type="text" id="ntp0" maxlength="63"></label>
+ <label><span>2</span><input type="text" id="ntp1" maxlength="63"></label>
+ <label><span>3</span><input type="text" id="ntp2" maxlength="63"></label>
+ <label><span>4</span><input type="text" id="ntp3" maxlength="63"></label>
+</div>
+<label><span>Sync interval</span><input type="number" id="ntp_interval_m" min="1" max="1440"> minutes</label>
+</section>
+
+<section><h2>Display</h2>
+<label><span>Brightness</span><select id="sched"><option value="0">Fixed</option><option value="1">Day / night schedule</option></select></label>
+<div id="fixed"><label><span>Level</span><select id="brightness"></select></label></div>
+<div id="schedule">
+ <label><span>Day level</span><select id="day_level"></select> from <input type="time" id="day_start"></label>
+ <label><span>Night level</span><select id="night_level"></select> from <input type="time" id="night_start"></label>
+</div>
+<p class="muted">UP / DOWN on the clock adjust the level currently in use.</p>
+<label><span>Colon</span><select id="colon"><option value="1">Blink once a second</option><option value="0">Steady</option></select></label>
+<label><span>When NTP is not answering</span><select id="stale">
+ <option value="1">Blinking colon goes steady</option>
+ <option value="2">Steady colon starts blinking</option>
+ <option value="3">Colon dots alternate</option>
+ <option value="0">No indication</option></select></label>
+</section>
+
+<section><h2>Sounds</h2>
+<label><span>Ticking</span><input type="checkbox" id="tick"> tick every second</label>
+<label id="tickmin"><span></span><input type="checkbox" id="tick_minute"> beep on the minute instead of a tick</label>
+<label><span>Chimes</span><input type="checkbox" id="chime"> strike the hours (1-12 times) and a short beep on the half hour</label>
+<label><span>Quiet hours</span><input type="checkbox" id="quiet"> no ticks or chimes from
+ <input type="time" id="quiet_start"> to <input type="time" id="quiet_end"></label>
+<p class="muted">Quiet hours do not affect alarms or button beeps. Chimes only sound once the clock knows the time. All clock sounds pause while an alarm rings.</p>
+</section>
+
+<section><h2>Alarms</h2>
+<div id="alarms"></div>
+<p class="muted">While a sounding alarm rings: UP or DOWN dismisses it, SET snoozes it. Alarms with sound off only drive GPIO14 and leave the buttons alone.</p>
+</section>
+
+<section><h2>Security</h2>
+<label><span>Web page password</span><input type="password" id="web_pass" maxlength="32" placeholder="unchanged"> <span class="muted">required, 8-32 characters</span></label>
+<label><span>Confirm password</span><input type="password" id="web_pass2" maxlength="32"></label>
+<p class="muted" id="pwstate"></p>
+<p class="muted">After saving a new password your browser asks for it: any user name works, with the password you chose.</p>
+<label><span>Setup access point password</span><input type="password" id="ap_pass" maxlength="63" placeholder="unchanged"></label>
+<p class="muted">The clock has no HTTPS, so passwords cross your network unencrypted. The password keeps casual visitors out, not someone listening on your WiFi.</p>
+</section>
+
+<div id="savebar"><button class="primary" id="save">Save</button></div>
+</form>
+
+<section><h2>GPIO14</h2>
+<p>Current state: <b id="g14">?</b>
+<button id="g14hi">Set high</button><button id="g14lo">Set low</button></p>
+<p class="muted">3.3 V logic output on header J2 ("KEY"). It can drive a relay module or transistor input, not a load directly. It is undriven for about half a second at power-up (longer when buttons are held at power-on, and after a factory reset it comes up low), then goes straight to its saved level: fit a pull resistor on the connected device.</p>
+</section>
+
+<section><h2>Firmware</h2>
+<p>Running: <span id="fw">?</span></p>
+<input type="file" id="fwfile" accept=".bin"> <button id="upload">Upload firmware</button>
+<p id="fwprog" class="muted"></p>
+</section>
+
+<section><h2>Maintenance</h2>
+<button id="restart">Restart</button>
+<button class="danger" id="reset">Factory reset</button>
+<p class="muted">Factory reset erases all settings, including the web password, and starts the setup access point. If you have forgotten the password, hold UP and DOWN while powering on instead.</p>
+</section>
+</main>
+
+<script>
+"use strict";
+const $=id=>document.getElementById(id);
+const DAYS=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+const G14=["None","High while ringing","Low while ringing","Set high","Set low","Toggle"];
+let S=null;
+
+function msg(id,text){for(const k of["err","ok"]){$(k).style.display="none"}
+ if(text){$(id).textContent=text;$(id).style.display="block";window.scrollTo(0,0)}}
+
+async function api(path,opt){
+ opt=opt||{};if(opt.method=="POST")opt.headers=Object.assign({"X-XYClock":"1"},opt.headers||{});
+ const r=await fetch(path,opt);let j={};
+ try{j=await r.json()}catch(e){}
+ if(!r.ok)throw new Error(j.error||("HTTP "+r.status));
+ return j}
+
+function levels(sel,min){sel.innerHTML="";for(let i=min;i<=8;i++){
+ const o=document.createElement("option");o.value=i;o.textContent=i?String(i):"Off";sel.appendChild(o)}}
+function hm(m){return String(Math.floor(m/60)).padStart(2,"0")+":"+String(m%60).padStart(2,"0")}
+function mins(v){const p=(v||"0:0").split(":");return(+p[0])*60+(+p[1])}
+
+function alarmRow(i,a){
+ const d=document.createElement("div");d.className="alarm"+(a.enabled?" on":"");d.id="al"+i;
+ let days="";DAYS.forEach((n,b)=>{days+=`<label><input type="checkbox" class="day" data-b="${b}" ${a.days>>b&1?"checked":""}>${n}</label>`});
+ let g="";G14.forEach((n,v)=>{g+=`<option value="${v}" ${a.g14==v?"selected":""}>${n}</option>`});
+ d.innerHTML=`<div class="row"><b>Alarm ${i+1}</b>
+ <label><input type="checkbox" class="en" ${a.enabled?"checked":""}> enabled</label>
+ <input type="time" class="tm" value="${hm(a.hour*60+a.minute)}">
+ <span class="ph muted"></span></div>
+ <div class="row days">${days}</div>
+ <div class="row">
+ <label><input type="checkbox" class="once" ${a.once?"checked":""}> ring once, then disable</label>
+ <label><input type="checkbox" class="snd" ${a.sound?"checked":""}> sound</label></div>
+ <div class="row">
+ <label>timeout <input type="number" class="to" min="0" max="240" value="${a.timeout_min}"> min (0 = until a key is pressed)</label>
+ <label>snooze <input type="number" class="sn" min="1" max="120" value="${a.snooze_min}"> min</label>
+ <label>GPIO14 <select class="g">${g}</select></label></div>`;
+ d.querySelector(".en").onchange=e=>d.classList.toggle("on",e.target.checked);
+ return d}
+
+function readAlarm(i){
+ const d=$("al"+i),q=s=>d.querySelector(s);let days=0;
+ d.querySelectorAll(".day").forEach(c=>{if(c.checked)days|=1<<+c.dataset.b});
+ const t=mins(q(".tm").value);
+ return{enabled:q(".en").checked,hour:Math.floor(t/60),minute:t%60,days:days,once:q(".once").checked,
+  sound:q(".snd").checked,timeout_min:+q(".to").value,snooze_min:+q(".sn").value,g14:+q(".g").value}}
+
+function checkAlarm(i,a){
+ const n="Alarm "+(i+1)+": ";
+ if(a.enabled&&!a.days)return n+"choose at least one day";
+ if(!a.sound&&a.g14==0)return n+"with sound off, choose a GPIO14 action";
+ if(!a.sound&&a.timeout_min==0&&(a.g14==1||a.g14==2))return n+"with sound off, the timeout cannot be 0";
+ if(a.snooze_min<1||a.snooze_min>120)return n+"snooze must be 1-120 minutes";
+ if(a.timeout_min<0||a.timeout_min>240)return n+"timeout must be 0-240 minutes";
+ return null}
+
+function syncVis(){
+ $("static").style.display=$("dhcp").value=="1"?"none":"block";
+ $("tzcustom").style.display=$("tzsel").value=="custom"?"block":"none";
+ const sch=$("sched").value=="1";$("fixed").style.display=sch?"none":"block";$("schedule").style.display=sch?"block":"none";
+ $("tick_minute").disabled=!$("tick").checked;
+ $("quiet_start").disabled=$("quiet_end").disabled=!$("quiet").checked;
+ const blink=$("colon").value=="1",st=$("stale");
+ st.options[0].disabled=!blink;st.options[1].disabled=blink;
+ if(st.selectedOptions[0].disabled)st.value=blink?"1":"2"}
+
+function fill(s){
+ S=s;
+ for(const k of["ssid","ip","netmask","gateway","dns","hostname"])$(k).value=s[k];
+ $("wifi_sec").value=s.wifi_sec;$("dhcp").value=s.dhcp?"1":"0";$("h24").value=s.h24?"1":"0";
+ $("wifi_pass").placeholder=s.wifi_pass_set?"unchanged":"";
+ for(let i=0;i<4;i++)$("ntp"+i).value=s.ntp[i]||"";
+ $("ntp_interval_m").value=Math.round(s.ntp_interval_s/60);
+ const sel=$("tzsel");sel.innerHTML="";
+ if(!s.tz){const o=document.createElement("option");o.value="";o.textContent="-- choose --";sel.appendChild(o)}
+ let found=false;
+ s.tz_table.forEach(z=>{const o=document.createElement("option");o.value=z.posix;o.textContent=z.name;sel.appendChild(o);if(z.posix==s.tz)found=true});
+ const c=document.createElement("option");c.value="custom";c.textContent="Custom...";sel.appendChild(c);
+ sel.value=!s.tz?"":found?s.tz:"custom";$("tz").value=s.tz;
+ levels($("brightness"),0);levels($("day_level"),1);levels($("night_level"),1);
+ $("brightness").value=s.brightness;$("day_level").value=s.day_level;$("night_level").value=s.night_level;
+ $("sched").value=s.sched?"1":"0";$("day_start").value=hm(s.day_start_min);$("night_start").value=hm(s.night_start_min);
+ $("colon").value=s.colon;$("stale").value=s.stale;
+ $("tick").checked=s.tick;$("tick_minute").checked=s.tick_minute;$("chime").checked=s.chime;
+ $("quiet").checked=s.quiet;$("quiet_start").value=hm(s.quiet_start_min);$("quiet_end").value=hm(s.quiet_end_min);
+ const al=$("alarms");al.innerHTML="";s.alarm.forEach((a,i)=>al.appendChild(alarmRow(i,a)));
+ $("pwstate").textContent=s.web_pass_set?"A web page password is set. Leave the fields empty to keep it.":"No web page password is set yet.";
+ $("first").style.display=s.first_setup?"block":"none";
+ $("needpw").style.display=!s.first_setup&&!s.web_pass_set?"block":"none";
+ syncVis()}
+
+function collect(){
+ const tz=$("tzsel").value=="custom"?$("tz").value.trim():$("tzsel").value;
+ const o={ssid:$("ssid").value,wifi_sec:+$("wifi_sec").value,dhcp:$("dhcp").value=="1",
+  ip:$("ip").value.trim(),netmask:$("netmask").value.trim(),gateway:$("gateway").value.trim(),dns:$("dns").value.trim(),
+  hostname:$("hostname").value.trim(),ntp:[0,1,2,3].map(i=>$("ntp"+i).value.trim()),
+  ntp_interval_s:Math.round(+$("ntp_interval_m").value*60),tz:tz,h24:$("h24").value=="1",
+  sched:$("sched").value=="1",brightness:+$("brightness").value,day_level:+$("day_level").value,
+  night_level:+$("night_level").value,day_start_min:mins($("day_start").value),night_start_min:mins($("night_start").value),
+  colon:+$("colon").value,stale:+$("stale").value,
+  tick:$("tick").checked,tick_minute:$("tick_minute").checked,chime:$("chime").checked,
+  quiet:$("quiet").checked,quiet_start_min:mins($("quiet_start").value),quiet_end_min:mins($("quiet_end").value),alarm:[0,1,2,3,4,5].map(readAlarm),
+  rev:S.rev};
+ for(const k of["wifi_pass","web_pass","ap_pass"])if($(k).value)o[k]=$(k).value;
+ return o}
+
+function validate(o){
+ const p1=$("web_pass").value,p2=$("web_pass2").value;
+ if(!S.web_pass_set&&!p1)return"Set a web page password (Security section)";
+ if(p1&&(p1.length<S.web_pass_min||p1.length>32))return"Web page password must be "+S.web_pass_min+"-32 characters";
+ if(p1!==p2)return"The two web page passwords do not match";
+ if(!o.tz)return"Please choose a time zone";
+ if(o.ssid&&o.wifi_pass!==undefined&&!(o.wifi_pass.length>=8&&o.wifi_pass.length<=63||/^[0-9a-fA-F]{64}$/.test(o.wifi_pass)))return"WiFi password must be 8-63 characters, or a 64-digit hex key";
+ if(o.ssid&&o.wifi_pass===undefined&&!S.wifi_pass_set)return"Enter the WiFi password";
+ if(o.ap_pass!==undefined&&(o.ap_pass.length<8||o.ap_pass.length>63))return"Access point password must be 8-63 characters";
+ if(!o.ntp.some(x=>x))return"Enter at least one NTP server";
+ if(!/^[a-z0-9]([a-z0-9-]{0,30}[a-z0-9])?$/.test(o.hostname))return"Device name: lowercase letters, digits and '-'";
+ if(o.quiet&&o.quiet_start_min==o.quiet_end_min)return"Quiet hours: start and end must differ";
+ for(let i=0;i<6;i++){const e=checkAlarm(i,o.alarm[i]);if(e)return e}
+ return null}
+
+async function save(){
+ const o=collect(),e=validate(o);if(e){msg("err",e);return}
+ try{
+  const r=await api("/api/settings",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(o)});
+  for(const k of["wifi_pass","web_pass","web_pass2","ap_pass"])$(k).value="";
+  if(r.reboot){msg("ok","Saved. The clock is restarting"+(o.ssid?" and joining \""+o.ssid+"\"":"")+". Reconnect to it on your network.");return}
+  msg("ok","Saved.");fill(await api("/api/settings"))
+ }catch(x){msg("err",x.message);if(/reload/.test(x.message))fill(await api("/api/settings"))}}
+
+async function status(){
+ try{
+  const s=await api("/api/status"),t=$("status");
+  const ago=s.last_sync?Math.round((s.now-s.last_sync)/60)+" min ago from "+(s.ntp_server||"?"):"never";
+  const rows=[["Time",s.datetime],["Time source",{trusted:"OK",stale:"NTP not answering (using RTC)",untrusted:"not set yet"}[s.trust]],
+   ["Last NTP sync",ago],["Network",s.ap_mode?"setup access point":(s.wifi?"connected, signal "+s.rssi+" dBm":"not connected"+(s.wifi_reason?" (last: "+s.wifi_reason_text+", code "+s.wifi_reason+")":""))],
+   ["IP address",s.ip],
+   ...(s.save_failed?[["Warning","a change could not be saved to flash and will be lost on power-off"]]:[]),["MAC address",s.mac],["Uptime",Math.floor(s.uptime_s/3600)+" h "+Math.floor(s.uptime_s%3600/60)+" min"]];
+  t.innerHTML="";rows.forEach(r=>{const tr=document.createElement("tr");
+   tr.innerHTML="<td></td><td></td>";tr.cells[0].textContent=r[0];tr.cells[1].textContent=r[1];t.appendChild(tr)});
+  $("g14").textContent=s.g14?"high":"low";$("hver").textContent=s.fw_version;$("fw").textContent=s.fw_version+" (built "+s.fw_built+", SDK "+s.idf+")";
+  s.alarms.forEach((p,i)=>{const e=document.querySelector("#al"+i+" .ph");if(e)e.textContent=p=="idle"?"":p})
+ }catch(x){}}
+
+async function g14(v){try{await api("/api/gpio14",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({state:v})});status()}catch(x){msg("err",x.message)}}
+
+function upload(){
+ const f=$("fwfile").files[0];if(!f){msg("err","Choose a firmware file (xyclock.bin) first");return}
+ const x=new XMLHttpRequest();x.open("POST","/api/ota");x.setRequestHeader("X-XYClock","1");
+ x.upload.onprogress=e=>{if(e.lengthComputable)$("fwprog").textContent="Uploading "+Math.round(100*e.loaded/e.total)+"%"};
+ x.onload=()=>{let j={};try{j=JSON.parse(x.responseText)}catch(e){}
+  if(x.status==200){$("fwprog").textContent="";msg("ok","Firmware accepted. The clock is restarting into it.")}
+  else{$("fwprog").textContent="";msg("err","Firmware rejected: "+(j.error||("HTTP "+x.status))+". The clock keeps its current firmware.")}};
+ x.onerror=()=>{$("fwprog").textContent="";msg("err","Upload failed (connection lost). The clock keeps its current firmware.")};
+ x.send(f)}
+
+async function post(path,confirmText,done){if(!confirm(confirmText))return;
+ try{await api(path,{method:"POST"});msg("ok",done)}catch(x){msg("err",x.message)}}
+
+/* Fixed lists are built at once, so they never depend on the settings reply. */
+levels($("brightness"),0);levels($("day_level"),1);levels($("night_level"),1);
+for(const id of["dhcp","tzsel","sched","colon","tick","quiet"])$(id).addEventListener("change",syncVis);
+const SEC={wpa3:"1",wpa2_wpa3:"2",wpa2:"0",encrypted:"2"};
+async function scan(){
+ const l=$("scanlist");l.innerHTML='<option value="">(scanning...)</option>';$("rescan").disabled=true;
+ try{const r=await api("/api/scan");l.innerHTML="";
+  const h=document.createElement("option");h.value="";
+  h.textContent=r.networks.length?"-- choose a network --":"(none found)";l.appendChild(h);
+  r.networks.forEach(n=>{const o=document.createElement("option");o.value=n.ssid;o.dataset.auth=n.auth;
+   const lab={wpa2:"WPA2",wpa2_wpa3:"WPA2/WPA3",wpa3:"WPA3",encrypted:"WPA2/WPA3, probably with fast roaming"}[n.auth]||("security type "+n.auth_raw+", may not work");
+   o.textContent=n.ssid+"  ("+n.rssi+" dBm, "+lab+")";l.appendChild(o)})
+ }catch(x){l.innerHTML='<option value="">(scan failed)</option>'}
+ $("rescan").disabled=false}
+$("scanlist").onchange=e=>{const o=e.target.selectedOptions[0];if(!o.value)return;
+ $("ssid").value=o.value;if(SEC[o.dataset.auth])$("wifi_sec").value=SEC[o.dataset.auth];$("wifi_pass").focus()};
+$("rescan").onclick=scan;
+async function wtest(){
+ const o=collect();if(!o.ssid){$("wtmsg").textContent="Enter a network name first.";return}
+ if(o.ssid&&o.wifi_pass===undefined&&!S.wifi_pass_set&&!(S.ssid&&S.ssid==o.ssid)){$("wtmsg").textContent="Enter the WiFi password first.";return}
+ $("wtest").disabled=true;$("wtmsg").textContent="Testing \""+o.ssid+"\"...";
+ try{await api("/api/wifi-test",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(o)})}
+ catch(x){$("wtmsg").textContent=x.message;$("wtest").disabled=false;return}
+ const t0=Date.now();let r=null;
+ while(Date.now()-t0<60000){
+  await new Promise(z=>setTimeout(z,1500));
+  try{r=await api("/api/wifi-test")}catch(x){$("wtmsg").textContent="Testing \""+o.ssid+"\"... (clock busy, waiting)";continue}
+  if(r.state=="done")break;
+ }
+ if(r&&r.state=="done")$("wtmsg").textContent=r.ok?"Success: connected to \""+r.ssid+"\" and got IP "+r.ip+". Press Save to use it."
+  :"Failed: "+(r.why||"could not connect")+(r.reason?" (code "+r.reason+")":"")+". Nothing was changed.";
+ else $("wtmsg").textContent="No result: the clock did not come back within a minute. Reload the page (in setup mode, rejoin its WiFi).";
+ $("wtest").disabled=false}
+$("wtest").onclick=wtest;
+$("save").onclick=save;$("g14hi").onclick=()=>g14(true);$("g14lo").onclick=()=>g14(false);$("upload").onclick=upload;
+$("sync").onclick=async()=>{const before=(await api("/api/status")).last_sync;
+ $("sync").disabled=true;$("syncmsg").textContent="Asking the NTP servers...";
+ try{await api("/api/ntp-sync",{method:"POST"});
+  for(let i=0;i<40;i++){await new Promise(r=>setTimeout(r,1000));const s=await api("/api/status");
+   if(s.last_sync&&s.last_sync!=before){$("syncmsg").textContent="Synced from "+(s.ntp_server||"NTP");status();break}
+   if(i==39)$("syncmsg").textContent="No answer yet; the clock keeps trying the servers in order."}
+ }catch(x){$("syncmsg").textContent=x.message}
+ $("sync").disabled=false};
+$("restart").onclick=()=>post("/api/restart","Restart the clock?","Restarting...");
+$("reset").onclick=()=>post("/api/factory-reset","Erase ALL settings and return to first setup?","Settings erased. The clock is restarting into setup mode.");
+api("/api/settings").then(s=>{fill(s);scan()}).catch(x=>msg("err",x.message));
+status();setInterval(status,2000);
+</script>
+</body></html>

@@ -1,0 +1,65 @@
+# Build environment for ESP8266_RTOS_SDK v3.4 (Sinilink XY-Clock firmware).
+#
+# Ubuntu 20.04 ships Python 3.8, which satisfies the SDK's old pinned
+# requirements (pyparsing<2.4, etc.) without fighting a modern system Python.
+
+FROM docker.io/library/ubuntu:20.04
+
+ARG DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        bison \
+        ca-certificates \
+        ccache \
+        cmake \
+        curl \
+        flex \
+        git \
+        gperf \
+        libncurses-dev \
+        make \
+        ninja-build \
+        python3 \
+        python3-pip \
+        python3-venv \
+        xz-utils \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV IDF_PATH=/opt/esp/ESP8266_RTOS_SDK \
+    IDF_TOOLS_PATH=/opt/esp/tools \
+    PYTHON_VENV=/opt/esp/venv
+
+# --- SDK, pinned to the v3.4 release commit -------------------------------
+# Submodules are fetched non-recursively: libcoap's nested tinydtls submodule
+# points at a dead git.eclipse.org URL, and none of the nested ones are needed.
+ARG SDK_REF=89a3f254b63819035f65d9c5dcdae8864f1a6a8a
+RUN git clone https://github.com/espressif/ESP8266_RTOS_SDK.git "$IDF_PATH" \
+    && cd "$IDF_PATH" \
+    && git checkout --detach "$SDK_REF" \
+    && git submodule update --init --depth 1
+
+# --- Xtensa lx106 toolchain (GCC 8.4.0, esp-2020r3), checksum verified ----
+ARG TC_URL=https://dl.espressif.com/dl/xtensa-lx106-elf-gcc8_4_0-esp-2020r3-linux-amd64.tar.gz
+ARG TC_SHA256=0a1804b5e2231c6db8b72af6bc2a0f9a5b6994cfba29956d412651109f13fe7e
+RUN mkdir -p /opt/esp/toolchain \
+    && curl -fsSL -o /tmp/tc.tgz "$TC_URL" \
+    && echo "$TC_SHA256  /tmp/tc.tgz" | sha256sum -c - \
+    && tar -xzf /tmp/tc.tgz -C /opt/esp/toolchain \
+    && rm /tmp/tc.tgz
+ENV PATH=/opt/esp/toolchain/xtensa-lx106-elf/bin:$PATH
+
+# --- Python environment for the SDK's build scripts -----------------------
+RUN python3 -m venv "$PYTHON_VENV" \
+    && "$PYTHON_VENV/bin/pip" install --no-cache-dir --upgrade "pip<24" "setuptools<70" wheel \
+    && "$PYTHON_VENV/bin/pip" install --no-cache-dir -r "$IDF_PATH/requirements.txt"
+ENV PATH=$PYTHON_VENV/bin:$IDF_PATH/tools:$PATH \
+    IDF_PYTHON_ENV_PATH=/opt/esp/venv \
+    IDF_CCACHE_ENABLE=1 \
+    CCACHE_DIR=/project/.ccache
+
+# Builds run as the invoking host user (rootless podman --userns=keep-id),
+# so make the SDK tree readable by anyone.
+RUN chmod -R a+rX /opt/esp && git config --system --add safe.directory '*'
+
+WORKDIR /project
+CMD ["/bin/bash"]

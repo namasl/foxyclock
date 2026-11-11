@@ -1,0 +1,31 @@
+#include "xy_tz.h"
+
+const xy_tz_t XY_TZ_TABLE[] = {
+    { "UTC",                           "UTC0" },
+    { "US Eastern",                    "EST5EDT,M3.2.0,M11.1.0" },
+    { "US Central",                    "CST6CDT,M3.2.0,M11.1.0" },
+    { "US Mountain",                   "MST7MDT,M3.2.0,M11.1.0" },
+    { "US Arizona",                    "MST7" },
+    { "US Pacific",                    "PST8PDT,M3.2.0,M11.1.0" },
+    { "US Alaska",                     "AKST9AKDT,M3.2.0,M11.1.0" },
+    { "US Hawaii",                     "HST10" },
+    { "Canada Atlantic",               "AST4ADT,M3.2.0,M11.1.0" },
+    { "Canada Newfoundland",           "NST3:30NDT,M3.2.0,M11.1.0" },
+    { "Mexico City",                   "CST6" },
+    { "Brazil (Sao Paulo)",            "<-03>3" },
+    { "UK / Ireland",                  "GMT0BST,M3.5.0/1,M10.5.0" },
+    { "Central Europe",                "CET-1CEST,M3.5.0,M10.5.0/3" },
+    { "Eastern Europe",                "EET-2EEST,M3.5.0/3,M10.5.0/4" },
+    { "Moscow",                        "MSK-3" },
+    { "South Africa",                  "SAST-2" },
+    { "India",                         "IST-5:30" },
+    { "China / Singapore",             "CST-8" },
+    { "Japan",                         "JST-9" },
+    { "Korea",                         "KST-9" },
+    { "Australia Western",             "AWST-8" },
+    { "Australia Central (Adelaide)",  "ACST-9:30ACDT,M10.1.0,M4.1.0/3" },
+    { "Australia Eastern (Sydney)",    "AEST-10AEDT,M10.1.0,M4.1.0/3" },
+    { "Australia Queensland",          "AEST-10" },
+    { "New Zealand",                   "NZST-12NZDT,M9.5.0,M4.1.0/3" },
+};
+const size_t XY_TZ_COUNT = sizeof XY_TZ_TABLE / sizeof XY_TZ_TABLE[0];
