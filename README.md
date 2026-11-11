@@ -2,8 +2,7 @@
 
 ![XY-Clock](xy_clock.png)
 
-**FOXY Clock** is replacement firmware for the Sinilink XY-Clock, low-cost WiFi digital clock built
-around an ESP8285. This firmware is built with the [ESP8266 RTOS SDK](https://github.com/espressif/ESP8266_RTOS_SDK) v3.4.
+**FOXY Clock** is replacement firmware for the Sinilink XY-Clock, a low-cost WiFi digital clock built around an ESP8285. This firmware is built with the [ESP8266 RTOS SDK](https://github.com/espressif/ESP8266_RTOS_SDK) v3.4.
 
 Features include:
 
@@ -38,10 +37,10 @@ Features include:
 
 ## Related Projects
 
-There are several related projects, including other custom firmware for the Sinilink XY-Clock or similar clocks, or various levels of documentation and reverse engineering.
+There are several related projects, which include other custom firmware (for Sinilink XY-Clock and related clocks), various levels of documentation, and reverse engineering.
 
 - [EdenRidgway/XY-Wifi-Clock](https://github.com/EdenRidgway/XY-Wifi-Clock): Arduino based replacement firmware.
-- [Utyff/xy-clock](https://github.com/Utyff/xy-clock) Another Arduino firmware, based off the project.
-- [/maarten-pennings/303WIFILC01](https://github.com/maarten-pennings/303WIFILC01), custom firmware for the similar 303 WIFI LC 01 clock.
+- [Utyff/xy-clock](https://github.com/Utyff/xy-clock) Another Arduino firmware, based off the project below.
+- [maarten-pennings/303WIFILC01](https://github.com/maarten-pennings/303WIFILC01), custom firmware for the similar 303 WIFI LC 01 clock.
 - [trip5/EspHome-Led-Clock](https://github.com/trip5/EspHome-Led-Clock) Firmware for use with [ESPHome](https://esphome.io/).
 - [Tasmota](https://templates.blakadder.com/XY-Clock.html) firmware and [discussion](https://github.com/arendst/Tasmota/discussions/15788).
